@@ -7,28 +7,33 @@ import os
 
 def reduce_grayscale(img, bits):
     img = img.convert("L")
+    if bits >= 24:
+        return img  # Full grayscale
     levels = 2 ** bits
-    return img.point(lambda x: int(x / 256 * levels) * int(256 / levels))
+    step = max(1, 256 // levels)
+    return img.point(lambda x: (x // step) * step)
 
 def amberize(img, bits):
     gray = reduce_grayscale(img, bits)
     return ImageOps.colorize(gray, black="black", white="#FFBF00")
 
 def reduce_rgb(img, bits):
-    factor = 256 // (2 ** bits)
-    return img.point(lambda x: int(x / factor) * factor)
+    if bits >= 24:
+        return img  # Full RGB
+    factor = max(1, 256 // (2 ** bits))
+    return img.point(lambda x: (x // factor) * factor)
 
 def process_image(path, width, height, mode, bits, out_format):
     img = Image.open(path).convert("RGB")
     img = img.resize((width, height), Image.LANCZOS)
 
     if mode == "Grayscale":
-        if bits not in [1, 2, 4, 8, 16]:
+        if bits not in [1, 4, 16, 24]:
             raise ValueError("Invalid bit depth for Grayscale")
         img = reduce_grayscale(img, bits)
 
     elif mode == "Amber":
-        if bits not in [1, 2, 4, 8, 12]:
+        if bits not in [1, 2, 4, 8, 12, 16]:
             raise ValueError("Invalid bit depth for Amber")
         img = amberize(img, bits)
 
@@ -58,11 +63,11 @@ def update_bit_depth_options(*args):
     menu = dropdown_bits["menu"]
     menu.delete(0, "end")
     if mode == "Grayscale":
-        options = [1, 2, 4, 8, 16]
+        options = [1, 4, 16, 24]
     elif mode == "Amber":
-        options = [1, 2, 4, 8, 12]
+        options = [1, 2, 4, 8, 12, 16]
     elif mode == "Color":
-        options = [1, 2, 3, 4, 5, 8, 12, 16, 32, 48, 64]
+        options = list(range(1, 65))
     else:
         options = []
     for opt in options:
@@ -74,6 +79,8 @@ def run_conversion():
         path = entry_path.get()
         w = int(entry_width.get())
         h = int(entry_height.get())
+        if not (1 <= w <= 8192 and 1 <= h <= 8192):
+            raise ValueError("Resolution must be between 1×1 and 8192×8192")
         mode = var_mode.get()
         bits = int(var_bits.get())
         out_format = var_format.get()
